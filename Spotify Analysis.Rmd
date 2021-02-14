@@ -1,0 +1,1405 @@
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+\newpage
+# 1. Real World Data
+
+## 1.1 Introduction
+Society often makes a clear distinction between the sciences and the arts. It is presumed that art forms such as music, which rely on an ephemeral user experience, have no relation to the disciplined techniques of mathematics. However, this paper will seek to demonstrate the opposite: data extracted from Spotify will be used to quantitatively predict the valence (i.e., ‘happiness’) of a soundtrack.
+
+## 1.2 Data Overview
+The original dataset studied in this report contains 169,909 audio tracks from Spotify having been released between 1921 and 2020. The data were originally collected using the Spotify Web API and contain 19 features describing each audio track. The features include 1 primary key, as well as 12 numerical, 4 categorical, and 2 dummy variables. A description of each variable can be found on [Kaggle](https://www.kaggle.com/yamaerenay/spotify-dataset-19212020-160k-tracks?fbclid=IwAR3IiQtM0Q0UpNpMDSrxNHQzD1hpNm2JWL_RguMSGdhpQ0PqoCXQstmuKaU&select=data.csv), where one can also find links to detailed data descriptions on the Spotify website.
+
+The response variable (valence) is approximately normally-distributed, with a slight left-skew. Furthermore, a number of the variables appear to be highly correlated, including acousticness, energy, loudness, popularity, and year. The corresponding plots are included in the Appendix.
+
+## 1.3 Data Cleaning
+A number of the variables were cleaned for modeling and for human interpretability, including ‘artists’, ‘duration_ms’, ‘loudness’, ‘name’, ‘num_artists’, ‘speechiness’, and ‘tempo’. 157,982 songs remain in the cleaned dataset.
+
+## 1.4 Feature Engineering
+Two new features were derived from existing variables to improve the model accuracy:
+
+  - Num_words_artists: A numeric variable counting the number of words in the ‘artists’ variable.
+
+  - Num_words_name: A numeric variable counting the number of words in the ‘name’ (of the song) variable.
+
+An external data source was also incorporated in order to enhance the model. Since the goal of the paper is to predict valence (i.e., ‘happiness’) of a song, it was hypothesized that songs created in a year of a financial crisis would tend to have a lower valence. Thus, [Table 15.1](https://scholar.harvard.edu/rogoff/time-different%E2%80%94data-files) was used to label years with a financial crisis. A dummy variable was created to indicate whether a financial crisis occurred in a given year.
+
+## 1.5 Methodology
+In order to prepare the data for modeling, the dataset was split into a 70% training set and a 30% testing set. The models were fitted on the training data and tested using the testing data. The Mean Squared Error for the testing data was used as a common metric to measure the model accuracy. Cross Validation was used to tune hyperparameters where required on the training data.
+
+## 1.6 Modeling
+A number of regression and classification models were tested and compared to identify the most accurate approach to predict valence, as detailed below.
+
+#### Linear Regression.
+The first model attempted was a linear regression, in which valence was regressed on all other features. This model is used as a benchmark in terms of prediction accuracy. All of the original variables were highly significant, except for ‘liveness’. Similarly, most of the derived features were highly significant. The benchmark prediction accuracy was .0338.
+
+#### Linear Regression with Interaction Terms.
+Next, another regression model was created by adding interaction terms. The interaction terms were chosen after examining a correlation plot for highly correlated features. Fewer variables showed significance at the .01 level; however, most of the interaction terms were significant. This model resulted in a lower MSE of .0323.
+
+#### Polynomial Regression.
+A model with polynomial terms was tested to provide a complete picture of the efficacy of various regression models. The two polynomial variables used were ‘energy’, and ‘danceability’, which were chosen as they were shown by the lasso (see below) to be the most significant predictors of valence. Upon squaring both terms and adding them to the benchmark model, the MSE improved to .0326.
+
+#### Best Subset Selection.
+In order to attempt to improve the linear regression models, best subset selection was implemented to remove any irrelevant features. Upon running best subset selection on the benchmark linear regression model, it was found that the best model used 8 of the 27 predictors. This resulted in a test MSE of .0338, which was approximately the same as the benchmark model. 
+
+#### Principal Component Regression.
+A dimension reduction technique was implemented on the benchmark linear model to test the impact of variable transformation. Cross validation was used (as opposed to leave-one-out) for computational efficiency. Using the ‘one standard error rule’, the model selected 26 of the 27 components and had an MSE of .0360, i.e., significantly worse than the benchmark model. Having tested various adaptations of the benchmark linear model with only marginal improvement, new machine learning techniques subsequently were explored using the set of all existing features.
+
+#### Ridge Regression.
+The ridge regression was attempted in order to seek an improvement over the OLS model by reducing the potential multicollinearity effect. An optimal penalty term was thus selected to reduce the variance of the model. This resulted in a test error of .0339; this is a reduction in accuracy from the benchmark OLS model. 
+
+#### Lasso.
+Due to the size of the dataset and the need for interpretability, a sparse model was explored as a way to provide improvement over other methods. Hence, the lasso was implemented, resulting in a test error of .0355. Although this test error is higher than that of the ridge regression, the lasso provides a significant improvement in terms of interpretability. The lasso selects danceability, duration, energy, explicit, speechiness, tempo, and year as the important variables for the model.
+
+#### Regression Tree.
+Due to its interpretability, a regression tree was also used to predict valence. The regression tree shows that the main determinants in determining valence are the danceability and energy of a track. The regression tree is significantly outperformed by the linear methods (.0411 test MSE), but it is slightly easier to interpret.
+
+#### AdaBoost.
+In addition to the standard machine learning techniques described above, the novel approach of AdaBoost was implemented in order to explore a classification approach. After transforming valence into a {1, -1} class variable (-1 for valence < ½, 1 for valence >= ½), AdaBoost was used to classify observations at several tree depths. The model achieved the lowest misclassification rate of 27.21% at tree depth 1. The model performed better at classifying songs with low valence than high valence (80.6% vs. 69.88% of the time).
+
+#### Random Forests.
+Despite their relative lack of interpretability, random forests are useful as they correct for overfitting in standard decision trees. Thus, random forests were tested using different tree levels. The number of variables randomly sampled at each split was set equal to the number of predictors / 3, due to the regression context of the model. Upon sampling the predictors, the number of trees was progressively increased. The computational process for this approach took about two minutes for 12 trees. However, for 24 trees the process took ten minutes and did not improve the model enough to warrant the extra time. Thus, a model with 12 trees was chosen. 
+
+While this method took longer to run than the other approaches, the use of random forests provided a significant improvement at predicting the testing data over all other approaches used. In fact, the out-of-bag testing error was 0.0272, i.e., providing a 16% improvement in the testing error from the next best method. According to the importance scores from the model, the most salient variables in predicting valence were the danceability and the energy of the audio track. 
+
+```{r echo=FALSE, fig.height = 4, fig.width=7, fig.align='center'}
+library(boot)
+library(caret)
+library(dplyr)
+library(e1071)
+library(fastDummies)
+library(ggcorrplot)
+library(glmnet)
+library(ISLR)
+library(JOUSBoost)
+library(leaps)
+library(NLP)
+library(MASS)
+library(Matrix)
+library(NLP)
+library(plm)
+library(pls)
+library(randomForest)
+library(SparseM)
+library(tree)
+library(kableExtra)
+library(purrr)
+
+spotify <-  readRDS('spotify.Rds')
+datax <- readRDS('datax.Rds')
+x<- readRDS('x.Rds')
+y<-readRDS('y.Rds')
+datac <- readRDS('datac.Rds')
+xc<- readRDS('xc.Rds')
+yc<-readRDS('yc.Rds')
+class.spotify<- readRDS('class_spotify')
+
+tmse.null<- readRDS('tsme_null.Rds')
+tmse.lm.base<-readRDS('tsme_lm_base.Rds')
+tmse.lasso<-readRDS('tmse_lasso.Rds')
+tmse.ridge<-readRDS('tmse_ridge.Rds')
+tmse.regrtree<-readRDS('tmse_regrtree.Rds') 
+mse.rf<-readRDS('mse_rf.Rds')
+tmse.pca<-readRDS('tmse_pca.Rds')
+tmse.lm.int<-readRDS('tmse_lm_int.Rds')
+tmse.lm.poly<-readRDS('tmse_lm_poly.Rds')
+mse_cv_best<-readRDS('mse_cv_best')
+
+
+mse<- as.data.frame(cbind(c('Null','Base Linear',
+                              'Lasso','Ridge', 
+                              'Regression Tree', 'Random Forests','PCR', 'Pol. Linear', 'Interaction Linear','Best Subset Selection'), 
+                            c(tmse.null, tmse.lm.base, tmse.lasso, 
+                              tmse.ridge, tmse.regrtree, 
+                              mse.rf,tmse.pca[which.min(tmse.pca)],tmse.lm.int,tmse.lm.poly, mse_cv_best[which.min(mse_cv_best)])))
+mse <- setNames(mse,c('Model','Test MSE'))
+```
+
+```{r echo=FALSE, fig.height = 4, fig.width=7, fig.align='center'}
+ggplot(mse,aes(x=reorder(mse[,1],desc(mse[,2])),y=as.numeric(mse[,2]))) +
+  geom_col(fill = "light blue", colour = 'black',position = 'dodge', stat='identity') + 
+    geom_text(aes(label=scales::number(as.numeric(mse[,2]),accuracy = 0.0001,
+                                 decimal.mark = '.')), position=position_dodge(width=0.9), vjust=-0.25)+
+    labs(x='Model', y='Test MSE', title = 'Test MSE per Model')+
+    scale_y_continuous(
+  labels = scales::number_format(accuracy = 0.01,
+                                 decimal.mark = '.')) +
+    scale_x_discrete(labels = function(labels) {
+    fixedLabels <- c()
+    for (l in 1:length(labels)) {
+      fixedLabels[l] <- paste0(ifelse(l %% 2 == 0, '', '\n'), labels[l])
+    }
+    return(fixedLabels)
+  })+
+    theme(text = element_text(size=10.5))
+```
+
+\newpage
+## 1.7 Conclusion
+The Random Forest provided the lowest test Mean Squared Error of all of the models, indicating the highest accuracy overall. This MSE value of .0272 demonstrated a 20% improvement over the benchmark linear model. For this reason, a Random Forest was ultimately chosen to predict valence despite the relative lack of interpretability of the model. 
+
+A close contender, however, was the linear model with interaction terms. This model shows an improvement over the benchmark model (4%) and quantifies each predictor’s impact with relative ease, in contrast to the Random Forest. This model would have been chosen had a higher importance been placed on interpretability.
+
+The most important variables contributing to valence were danceability and energy. Intuitively this observation squares with reality, as valence (i.e., ‘happiness’) of a song often seems related to the danceability and energy of a soundtrack. Now, however, there is quantifiable evidence to support this intuition.
+
+Overall, the use of the Random Forest indicates that linear techniques are not always optimal in modeling data of disparate variables. Such relationships are often complex, requiring the stratification of the predictor space into multiple regions. The averaging of multiple samples of trees of predictors is useful in this instance, as it allows for refinement of the model while still demonstrating that a variable can be broken down into its constituent parts. Thus, the Random Forest has proven its efficacy in modeling the impact of various musical features on valence.
+
+\newpage
+
+# 2. Coordinate Descent Algorithm for Solving the Lasso Problems
+
+## 2.1 Introduction
+
+While ordinary least squares (OLS) regression is used for a variety of situations, it suffers from two major shortcomings. It has low **prediction accuracy** (low variance but potentially very large bias) and, if there are many features, its **interpretability** is poor. Instead, we would often like a smaller subset of the predictors that explain the response variable.
+
+The lasso, proposed by Tibshirani (1996), was developed in part to address to these shortcomings. However, the lasso suffers from certain limitations itself, i.e. it can perform badly in some scenarios, especially in the high dimensional case of $p>n$ or if there are correlated predictors. Consequently, the elastic net penalty was developed with the goal of achieving higher prediction accuracy while still maintaining the lasso's advantage as a continuous variable selection method. The goal of this project report is to show that
+
+  - the elastic net can dominate the lasso in terms of prediction accuracy, and 
+  - like the lasso, the elastic net performs variable selection.
+
+Both the lasso and the elastic net estimates are defined as the $\arg\min$ of a penalized residual sum of squares, which is often written in the following form. Note that $\alpha=1$ corresponds to lasso regression and $\alpha=0$ corresponds to ridge regression. For intermediate $\alpha$, we get a mixed penalty (the elastic net penalty).
+
+$$
+\begin{aligned}
+\hat{\beta} &= \arg\min_{\beta}\{\frac12\|Y-X\beta\|_2^2 + \lambda\left(\alpha\|\beta\|_1 + (1-\alpha)\|\beta\|_2^2\right)\} \\
+&= \arg\min_{\beta}\{\frac12\sum_{i=1}^n\left(y^{(i)}-\sum_{j=0}^px^{(i)}_j\beta_j\right)^2 + \lambda\left(\alpha\sum_{j=0}^p|\beta_j|+(1-\alpha)\sum_{j=0}^p\beta_j^2\right)\}
+\end{aligned}
+$$
+
+## 2.2 Methodology and Parameter Tuning
+
+The goal is to compare the performance of two statistical learning methods - not on one specific data set, but in general. Therefore, a simulation experiment is used in order to repeat the experiment multiple times, observe the behavior of the methods, and average the results. As we want both methods to perform at their best, an important step in this procedure is the parameter tuning.
+
+In fact, there are several ways to find the optimal regularization parameter $\lambda$ for the lasso, or $\lambda$ and $\alpha$ for the elastic net. Two such methods are using an information criterion and cross validation. We first briefly discuss why we do not choose these methods here.
+  
+#### Why we do not use an information criterion.
+One big drawback of using an information criterion such as $C_p$ or $BIC$ is that it requires us to specify the (effective) degrees of freedom $df_\lambda$, which can be difficult for regularized models. (For the lasso, the number of non-zero parameters is an unbiased and consistent estimator. However, this is not true for the elastic net). In fact, using an information criterion is most useful when we do not have a validation and/or test set. Since we do know how the data is generated in this experiment, we simply use separate data sets for parameter tuning (validation data) and model evaluation (test data).
+
+#### Why we do not use cross validation.
+Cross validation works by splitting the data into folds (typically 5 or 10) and using each fold as a hold-out validation set. Like cross validation, however, it is also most useful when there is no explicit validation and/or test set and is therefore not necessary in a simulation experiment where we can simply generate multiple data sets from the data generating distribution.
+
+Therefore, we use the setting which is also suggested in the instructions. That is, we simulate 50 data sets $\tau^{(1)},...,\tau^{(50)}$ and split each of them into a training, validation, and test set, i.e. $\tau^{(i)} = [\tau^{(i)}_{train}, \tau^{(i)}_{val}, \tau^{(i)}_{test}]$. For example, we may choose sample sizes $n_{train} = n_{val} = 20$ and $n_{test} = 200$.
+
+#### Procedure.
+More specifically, we (1) fit the model on the training data, (2) use the validation data to find the optimal hyper-parameter(s), and (3) evaluate the performance of the optimal model on the test data. We apply this procedure to all 50 data sets and to both the lasso and the elastic net in order to obtain an estimate of their performance. For the lasso, we fix $\alpha=1$ and consequently only optimize over a $\lambda$-sequence in step (2) whereas for the elastic net we perform a two-dimensional grid-search over each combination of a $\lambda$- and $\alpha$-sequence.
+
+## 2.3 Performance Metrics
+
+The most important performance indicator for a statistical learning method arguably is prediction accuracy. Consequently, we use the MSE (specifically, the average of the 50 MSEs) in combination with the corresponding standard error. In addition, we also track the number of non-zero coefficients, how often the two methods choose the correct model (exactly), and how often the two methods choose the correct parameters (among others).
+
+To summarize, we
+
+  - calculate $\hat{MSE} = \frac1{50} \sum_{i=1}^{50} \hat{MSE}^{(i)}(\tau^{(i)}_{test})$ where each $\hat{MSE}^{(i)}(\tau^{(i)}_{test})= \frac1{50}\sum_i(Y^{(i)}-X\hat{\beta}_{best}^{(i)})^2$
+  - count the number of non-zero coefficients
+  - count how often the methods _choose_ the right model
+  - count how often the methods _include_ the right parameters among others
+
+#### Which MSE exactly we are trying to estimate.
+Since we repeatedly generate training, validation, and test data, we effectively average over the randomness in the data, giving us an estimate of the _expected prediction error_ $Err = E\{L(Y,\hat{f}(X)\}$ and not the prediction error conditional on a given data set $Err_\tau = E\{L(Y,\hat{f}(X)|\tau\}$ (also called the _generalization error_), where $L$ is a loss function such as squared error. The latter is typically what is most relevant in practice (as we want to know how well a model trained on a given data set performs), but the former is what we need for comparing two learning algorithms. Interestingly, cross validation also effectively estimates the expected prediction error rather than the generalization error - see ESL Chapter 7.12 (Hastie, T. et al, 2009).
+
+## 2.4 Coordinate Descent Algorithm
+
+Tseng (1998) shows that component wise coordinate descent can be used to minimize a function $$g(x) = q(x) + \sum_j p_j(x)$$ where $q(x)$ is continuously differentiable and convex and each $p_j(x)$ is convex. As Friedman et al. (2007) show, this result is applicable to the lasso problem, which aims to minimize the $l_1$-penalized residual sum of squares. In fact, it can also be used for the elastic net penalty. Essentially, the problem reduces to a component-wise, cyclic minimization problem. The coordinate updates are done using the soft threshold function outlined below (Friedman, J. et al, 2009). Note that in the case of $\alpha=1$, this reduces to the lasso soft threshold update.
+
+$$
+\beta_j = \frac{sign(\beta^*)(|\beta^*|-\lambda\alpha)_+}{1+\lambda(1-\alpha))}
+$$
+
+### Implementation of the Coordinate Descent Algorithm
+
+```{r include=FALSE}
+# libraries used
+library(tidyverse)
+library(MASS)
+library(kableExtra)
+```
+
+```{r coordinate-descent-algorithm}
+coorDesc = function(X,              # nxp design matrix
+                    Y,              # nx1 vector of the response variable
+                    lambda,         # regularization parameter
+                    alpha = 1,      # alpha = 1 corresponds to LASSO
+                    tol = 1e-5,     # tolerance
+                    max_iter = 100  # max number of iterations
+                    ){
+  
+  ######################## coordinate descent algorithm ########################
+  
+  n = dim(X)[1]; p = dim(X)[2]
+  beta = rep(0, p)      # initialize beta
+  Y = Y/sd(Y)           # standardize Y
+  delta_beta = tol      # stopping criterion #1
+  iter = 0              # stopping criterion #2
+  
+  while(delta_beta>=tol & iter<max_iter){
+    beta_old = beta
+    for(j in 1:p){
+      beta_star = X[,j] %*% (Y - X[,-j] %*% beta[-j])/n  # LSE on partial residual
+      beta[j] = soft(beta_star, lambda, alpha)           # soft threshold update
+    }
+    iter = iter + 1
+    delta_beta = sum(abs(beta-beta_old))
+  }
+  return(beta)
+}
+```
+
+```{r soft-threshold-functions}
+soft = function(beta, lambda, alpha){
+  #### soft threshold function ####
+  return(sign(beta) * max(abs(beta)-alpha*lambda, 0) / (1+lambda*(1-alpha)))
+}
+```
+
+### Implementation of the Grid Search Algorithm
+
+```{r grid-search}
+gridSearch = function(dataset, lambdaSEQ, alphaSEQ = 1){
+  
+  ############################# grid search #############################
+  
+  # searches over a grid of lambdas and alphas for optimal parameters
+  # returns a list with details useful for model evaluation
+  
+  params = list("lambda" = lambdaSEQ, "alpha" = alphaSEQ)
+  grid = expand.grid(params)   # each combination of lambda and alpha
+  results = list(lambda=NA, alpha=NA, mse=NA, nonzero=NA,
+                 incModel=NA, trueModel=NA, beta=NA)
+  
+  # (1) fit models on training data
+  betas = map(transpose(grid), ~coorDesc(dataset$X[train,], dataset$Y[train,], 
+                                         .$lambda, .$alpha))
+
+  # (2) evaluate models on validation data
+  msesVal = map_dbl(betas, ~mse(dataset$X[val,], dataset$Y[val,], .))
+  bestBeta = betas[[which.min(msesVal)]]   # pick best beta based on lowest val mse
+  
+  # useful for discussion of the results
+  results$lambda = grid$lambda[which.min(msesVal)]
+  results$alpha = grid$alpha[which.min(msesVal)]
+  results$nonzero = sum(bestBeta!=0)
+  results$incModel = all(bestBeta[beta!=0]!=0)
+  results$trueModel = results$incModel & results$nonzero == sum(beta!=0)
+
+  # (3) evaluate model on test data
+  results$mse = mse(dataset$X[test,], dataset$Y[test,], bestBeta)
+  return(results)
+}
+```
+
+```{r mse-function}
+mse = function(X, Y, beta){
+  #### mean squared error ####
+  return(mean((Y-(X%*%beta)*sd(Y))^2))
+}
+```
+
+
+## 2.5 Simulation Experiment
+We test and compare the two methods in four different scenarios. The scenarios are chosen such that we can uncover some of the lasso's weaknesses and show that the elastic net performs better in these cases.
+
+Before that, we first briefly revisit the issue of the parameter tuning. As mentioned before, we use a grid search over each combination of a $\lambda$ and $\alpha$ sequence. For the lasso, we choose 40 $\lambda$ values equally spaced on a log-scale between $10^{-3}$ and $10$. For the elastic net, we use the same $\lambda$ sequence but additionally choose 20 $\alpha$ values linearly spaced between 0.05 and 1. That means, the grid search will perform 40 fits for the lasso and 800 fits for the elastic net. We found that this grid works for all four scenarios.
+
+Also note that the code used in this and the following chapters has been put into the appendix to make it more readable.
+
+#### Scenario A.
+Our first scenario resembles the one suggested in the instructions. We have 8 features with $corr(i,j) = 0.5^{|i-j|}$. The true coefficients are $\beta = (3, 1.5, 0, 0, 2, 0, 0, 0)^T$, i.e. three coefficients are non-zero (features 1, 2 and 5). The standard deviation of the error $\epsilon$ is chosen to be 3.
+
+```{r generate-data, include=FALSE}
+gen_data = function(n, beta, Sigma, sd=3){
+  #### generate a data set ####
+  epsilon = rnorm(n, sd = sd)
+  X = mvrnorm(n, mu = rep(0, length(beta)), Sigma)
+  Y = X%*%beta + epsilon
+  return(list("X" = X, "Y" = Y))
+}
+```
+
+```{r scenario-A, eval=FALSE, echo=FALSE}
+n = 240; train = 1:20; val = 21:40; test = 41:240
+beta = c(3, 1.5, 0, 0, 2, 0, 0, 0)
+Sigma = outer(1:8, 1:8, function(i,j) 0.5^abs(i-j))
+
+# data sets for A
+datasets = map(1:50, ~gen_data(n, beta, Sigma))
+
+# sequences for lambda and alpha
+lambdaSEQ = c(0, 10^seq(-3, 1, length.out = 39))
+alphaSEQ = seq(0.05, 1, length.out = 20)
+
+# model fitting
+resLASSOA = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETA = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOA$type = "lasso"; resELNETA$type = "elnet"
+resultsA = rbind(resLASSOA, resELNETA)
+resultsA$scenario = 'Scenario A'
+# saveRDS(resultsA, 'data/resultsA.RDS')
+```
+
+```{r echo=FALSE}
+resultsA = readRDS('data/resultsA.RDS')
+```
+
+
+#### Scenario B.
+Scenario B is identical to scenario A except that now we choose the coefficients to be $\beta_j = 0.85$ for all $i=1,...8$.
+
+```{r scenario-B, eval=FALSE, echo=FALSE}
+# data sets for B
+beta = rep(0.85, 8)
+datasets = map(1:50, ~gen_data(n, beta, Sigma))
+
+# model fitting
+resLASSOB = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETB = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOB$type = "lasso"; resELNETB$type = "elnet"
+resultsB = rbind(resLASSOB, resELNETB)
+resultsB$scenario = 'Scenario B'
+# saveRDS(resultsB, 'data/resultsB.RDS')
+```
+
+```{r echo=FALSE}
+resultsB = readRDS('data/resultsB.RDS')
+```
+
+#### Scenario C.
+Our third scenario has three groups of three highly correlated predictors (within-group $\rho=0.85$, no correlation between groups) and additionally 11 noise features, i.e. 20 features in total. We also use larger data sets here, i.e. $n_{train} = n_{val} = 100$ and $n_{test} = 200$.
+
+```{r scenario-C, eval=FALSE, echo=FALSE}
+n = 400; train = 1:100; val = 101:200; test = 201:400
+beta = c(rep(3, 9), rep(0, 11))
+rho = matrix(rep(0.85, 9), ncol = 3)
+Sigma = rbind(cbind(rho, matrix(rep(0, 17*3), ncol = 17)), 
+              cbind(matrix(rep(0, 9), ncol = 3), rho, matrix(rep(0, 14*3), ncol = 14)),
+              cbind(matrix(rep(0, 3*6), ncol = 6), rho, matrix(rep(0, 11*3), ncol = 11)), 
+              matrix(rep(0, 20*11), ncol = 20))
+diag(Sigma) = rep(1, 20)
+
+# data sets for C
+datasets = map(1:50, ~gen_data(n, beta, Sigma, 3))
+
+# model fitting
+resLASSOC = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETC = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOC$type = "lasso"; resELNETC$type = "elnet"
+resultsC = rbind(resLASSOC, resELNETC)
+resultsC$scenario = 'Scenario C'
+# saveRDS(resultsC, 'data/resultsC.RDS')
+```
+
+```{r echo=FALSE}
+resultsC = readRDS('data/resultsC.RDS')
+```
+
+
+#### Scenario D.
+We choose $\beta=(1,...,1,0,...,0)$ such that the first 25 coefficients are 1 and the last 5 are zero. In this scenario, $p>n$ since we again use a training data set of just size 20. More specifically, we use $n_{train} = n_{val} = 20$ and $n_{test} = 200$. We do not want correlation between variables to play a role here so we set it to zero.
+
+```{r scenario-D, eval=FALSE, echo=FALSE}
+# scenario D data generation
+n = 240; train = 1:20; val = 21:40; test = 41:240
+beta = c(rep(1, 25), rep(0, 5))
+Sigma = diag(rep(1, 30))
+
+# data sets for D
+datasets = map(1:50, ~gen_data(n, beta, Sigma, sd=3))
+
+# sequences for lambda and alpha
+lambdaSEQ = c(0, 10^seq(-3, 1, length.out = 39))
+alphaSEQ = seq(0.05, 1, length.out = 20)
+
+# model fitting
+resLASSOD = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETD = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOD$type = "lasso"; resELNETD$type = "elnet"
+resultsD = rbind(resLASSOD, resELNETD)
+resultsD$scenario = 'Scenario D'
+# saveRDS(resultsD, 'data/resultsD.RDS')
+```
+
+```{r echo=FALSE}
+resultsD = readRDS('data/resultsD.RDS')
+```
+
+
+## 2.6 Discussion of the Results
+Scenarios A, B, and C are meant to show that the lasso's performance suffers under collinearity, i.e. under correlated predictors. The reason is that the lasso tends to choose one variable among correlated variables while driving the other coefficients to zero.
+
+```{r mse-plot, echo=FALSE, fig.width=6, fig.height=4, fig.align='center'}
+results = rbind(resultsA, resultsB, resultsC, resultsD)
+
+ggplot(results) +
+  geom_boxplot(aes(type, mse)) +
+  facet_wrap(~scenario, scales = "free_y") +
+  labs(title = "Prediction Accuracy", 
+       subtitle = "measured by the mean squared error (MSE)", caption = "Figure 1")
+```
+
+In **Scenario A**, features one and two are correlated. We would therefore expect the lasso to often either choose feature one or feature two but not both, and the elastic net to choose both more frequently. This indeed happens quite often. As can be seen in the table at the end of this section, the elastic net includes the right coefficients (1,2 and 5) 39 times vs only 23 times for the lasso, even though the lasso finds the exactly right model more often (3 vs 0 times). However, the elastic net tends to choose too many variables in this scenario - the median is 6 vs 4 for the lasso (see _Figure 2_). As a result, its prediction accuracy is only slightly (perhaps not significantly) better than the lasso's (see _Figure 1_).
+
+**Scenario B** is a more extreme version of the same issue. All 8 predictors are nonzero and there is substantial correlation. The lasso tends to set some of the coefficients to zero such that the median of nonzero coefficients is only 5 whereas for the elastic net it is 7, which is closer to the true value of 8 (_Figure 2_). Indeed, the elastic net finds the right model 24 times vs only 8 times for the lasso. Its advantage is therefore much clearer in this scenario. In fact, we can expect that ridge regression would be the method that performs best here because it does not set any coefficients to zero.
+
+```{r nonzero-plot, echo=FALSE, fig.width=6, fig.height=4, fig.align='center'}
+Summary = results %>%
+  group_by(scenario, type) %>%
+  summarise(mse = mean(mse),
+  nonzero = median(nonzero),
+  trueModel = sum(trueModel),
+  incModel = sum(incModel))
+
+ggplot(results, aes(type, nonzero)) +
+  geom_jitter(width = 0.10, height = 0, alpha = 0.5) +
+  geom_point(aes(type, nonzero), data = Summary, col='red') +
+  facet_wrap(~scenario, scales = "free_y") +
+  labs(title = "Number of Nonzero Coefficients Chosen by the Elastic Net vs Lasso",
+       subtitle = "Each data set is represented by one point, with the median in red",
+       caption = "Figure 2")
+```
+
+**Scenario C** is meant to show that the elastic net exhibits the _grouping effect_ while the lasso does not. "_Qualitatively speaking, a regression method exhibits the grouping effect if the regression coefficients of a group of highly correlated variables tend to be equal (up to a change of sign if negatively correlated)_" (Zou and Hastie, 2005). The grouping effect can be explained by the fact that the $l2$ penalty drives the coefficients of correlated predictors towards each other while the $l1$ penalty tends to pick only one out of a group of correlated predictors.
+
+In scenario C, there are three groups of correlated predictors. We would therefore expect the lasso to often choose only one from a group and the elastic net to (ideally) choose all three. We can indeed recognize this pattern in Figure 2 above. The lasso chooses fewer than 9 variables quite often (the median is 7.5), sometimes even as few as 4 or 5, while the elastic net tends to choose more (the median is 13, see Figure 2). In fact, it chooses the correct coefficients most of the time (47 times vs only 9 times for the lasso, see table below). As a result, the elastic net again clearly outperforms the lasso in terms of prediction accuracy, as measured by the MSE. Its performance is also much less variable, as we can see in _Figure 1_.
+
+Lastly, **Scenario D** is meant to show the lasso's limitations in the high dimensional setting of $p>n$, i.e. then there are more features than observations. The lasso has a big drawback in that case, namely it chooses at most $n$ variables. This is due to the nature of the convex optimization problem of the lasso. The elastic net, by contrast, can choose more than $n$ variables. As we can see, the median of nonzero coefficients is 18 for the elastic net (close to the true value 20) and only 5 for the lasso (_Figure 2_). However, the lasso chooses fewer coefficients than we would have expect here (see the section on limitations below). Nevertheless, the elastic net again has a lower MSE.
+
+
+#### Summary of the Results.
+We have shown that the elastic net outperforms the lasso in various situations, especially under collinearity and if $p>n$. We have also shown that the elastic net, like the lasso, can produce sparse solutions, but it tends to select more predictors on average because of the additional $l2$ penalty and its grouping effect. We summarize the results again in the following table, which most importantly shows that the elastic net achieved a lower MSE in all four scenarios.
+
+```{r echo=FALSE}
+Summary %>%
+  kbl() %>%
+  kable_styling()
+```
+
+## 2.7 Limitations and Improvements
+
+#### Divergence of the coordinate descent. 
+If there is considerable correlation between predictors, the coordinate descent algorithm sometimes diverges, especially for small $\lambda$ (and in combination with a small training size). This does not, however, influence our results too much as our grid search simply does not choose such a $\lambda$. In scenario D, where $p>n$, this issue arises more often, which might explain why the lasso did not quite choose the number of nonzero coefficients we expected, i.e. below but closer to 20. Therefore, the true MSE difference of scenario D may not be accurately displayed in Figure 1.
+
+#### Parameter tuning.
+As mentioned previously, the grid that the methods are optimized on is crucial. Ideally, it should be a large and dense enough grid of values or otherwise sub-optimal (or even bad) parameters are likely. We found that it can be difficult to find an ideal range for both $\lambda$ and $\alpha$ together so that choosing the grid eventually involved some trial and error. As a result, both methods may be able to achieve better prediction accuracy if optimized on a more optimal grid.
+
+In addition, a two dimensional grid search is also computationally very intensive. Consequently, our grids could not be as large and dense as may be ideal. In hindsight, we find that a different tuning strategy would have possibly been more adequate. For example, Bayesian parameter tuning is a sequential procedure (simply put). In that case, we would first optimize $\lambda$ (while setting $\alpha=1$) and conditional on the best $\lambda$, we would select the best $\alpha$. This procedure may not lead to globally optimal parameters, but it would have probably also allowed us to show the elastic net's superiority over the lasso, which is the goal of the project.
+
+#### Pathwise coordinate descent.
+A significant improvement in computational efficiency can be made by fitting the model along a path, making use of warm starts for $\beta$ instead of initializing it as a zero vector for each coordinate descent. More specifically, we should start with the smallest $\lambda$ for which all $\beta_j$ are 0, gradually decrease it and use each $\beta$ as a warm start for the next descent. That way, we would vastly reduce the number of iterations needed for convergence of the coordinate descents algorithm.
+
+#### One-standard-error rule.
+Instead of choosing lambda based on the lowest validation MSE, we could use the one-standard-error rule to choose simpler models and perhaps achieve a higher prediction accuracy - but this is true for both the lasso and the elastic net.
+
+
+## 2.8 References 
+Friedman, J., Hastie, T. and Hofling, H. (2007). Pathwise coordinate optimization, The Annals of Applied Statistics 1: 302-332.
+
+Tibshirani, R. (1996). Regression shrinkage and selection via the lasso, Journal of Royal Statistical Society, Series B 58: 267-288.
+
+Tseng, P. (1988). Coordinate ascent for maximizing nondifferentiable concave functions, Technical Report.
+
+Zou, H. and Hastie T. (2005). Regularization and variable selection via the elastic net, Royal Statistical Society, Series B 67: 301–320.
+
+Hastie, T., Tibshirani, R. and Friedman J. (2009). The Elements of Statistical Learning. Data Mining, Inference, and Prediction. Springer, New York, NY.
+
+Friedman, J., Hastie, T. and Tibshirani, R. (2009). Regularization Paths for Generalized Linear Models via Coordinate Descent.
+
+
+
+# 3. Appendix
+
+## 3.1 Appendix for Real World Data
+
+### Variable Plots
+```{r variables, echo=FALSE, fig.height=12, fig.width=10}
+par(mfrow=c(4,2))
+hist(spotify$valence, main = ' Valence', xlab = 'Valence', col= 'light blue')
+hist(spotify$acousticness, main = ' Acousticness', xlab = 'Acousticness', col= 'light blue')
+hist(spotify$danceability, main = ' Danceability', xlab = 'Danceability', col= 'light blue')
+hist(spotify$duration_ms, main = ' Duration', xlab = 'Duration (ms)', col= 'light blue')
+hist(spotify$energy, main = ' Energy', xlab = 'Energy', col= 'light blue')
+hist(spotify$explicit, main = ' Explicitness', xlab = 'Explicitness', col= 'light blue')
+hist(spotify$instrumentalness, main = ' Instrumentalness', xlab = 'Instrumentalness', col= 'light blue')
+hist(spotify$liveness, main = ' Liveness', xlab = 'Liveness', col= 'light blue')
+```
+
+
+```{r variables2, echo=FALSE, fig.height=12, fig.width=10}
+par(mfrow=c(3,2))
+hist(spotify$loudness, main = ' Loudness', xlab = 'Loudness', col= 'light blue')
+hist(spotify$mode, main = ' Mode', xlab = 'Mode', col= 'light blue')
+hist(spotify$num_artists, main = ' Number of Artists', xlab = 'Number of Artists', col= 'light blue')
+hist(spotify$num_words_artists, main = 'Number of Words in Artist\'s Name', xlab = 'Number of Words in Artist\'s Name', col= 'light blue')
+hist(spotify$popularity, main = ' Popularity', xlab = 'Popularity', col= 'light blue')
+hist(spotify$speechiness, main = ' Speechiness', xlab = 'Speechiness', col= 'light blue')
+hist(spotify$tempo, main = ' Tempo', xlab = 'Tempo (BPM)', col= 'light blue')
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=6, fig.align='center'}
+plot(spotify$year, spotify$financial_crisis_year, main= 'Years in which there was a Financial Crisis', ylab='Financial Crisis (T/F)' , xlab='Year', pch = 21, bg= 'light blue', col='black')
+```
+
+### Correlation Plot
+```{r, echo= FALSE, fig.height=5, fig.width=5, fig.align='center'}
+cor_matrix<-readRDS('cor_matrix.Rds')
+ggcorrplot(cor_matrix, hc.order = TRUE, tl.cex=8, tl.srt = 90)
+```
+
+### Subset Selection
+```{r Subset selection, echo=FALSE, fig.height=4, fig.width=6, fig.align='center'}
+regfit_full<-readRDS('regfit_full.Rds')
+reg_summary = summary(regfit_full) # shows which variables are selected
+
+
+## Plot Cp (an unbiased estimate of test MSE)
+plot(reg_summary$cp, xlab="Number of Variables", ylab="Cp", type="l", col = 'light blue', main = 'Best Subset Selection Cp estimate')
+best_model_cp = which.min(reg_summary$cp)
+points(best_model_cp, reg_summary$cp[best_model_cp], col="red", pch=20)
+
+```
+
+### Principal Component Analysis Plot
+```{r, echo = FALSE}
+par(mfrow=c(1,1))
+tmse.pca<- readRDS('tmse_pca.Rds')
+fit.pcr<- readRDS('fit_pcr.Rds')
+plot(tmse.pca, type = "o", xlab = "Number of Components", ylab = "MSE", main= 'Principal Component Regression Test MSE')
+points(26, tmse.pca[26], col="red", pch=20)
+```
+
+
+### Regression Tree Plot
+
+```{r, echo= FALSE, fig.height=5, fig.align='center'}
+regrtree.mod<-readRDS('regrtree_mod.Rds')
+plot(regrtree.mod, main= 'Regression Tree Model')
+  text(regrtree.mod, pretty=0)
+```
+
+### Ridge Regression Plots
+
+  - **Ridge Regression coefficient shrinkage**
+
+```{r, echo= FALSE, fig.height=4, fig.align='center'}
+ridge.mod<-readRDS('ridge_mod.Rds')
+plot(ridge.mod, ylab = 'MSE')
+```
+
+  - **Ridge Regression Cross Validation errors for given lambda**
+
+```{r, echo= FALSE, fig.height=4, fig.align='center'}
+cv.ridge.out<-readRDS('cv_ridge_out.Rds')
+plot(cv.ridge.out, ylab= 'MSE')
+```
+
+### Lasso Plots
+
+  - **Lasso coefficient shrinkage**
+
+```{r, echo= FALSE, warning=FALSE, fig.height=4, fig.width=7}
+lasso.mod<-readRDS('lasso_mod.Rds')
+plot(lasso.mod)
+```
+
+  - **Lasso Cross Validation errors for given lambda**
+
+```{r, echo= FALSE, fig.height=6, fig.height=4, fig.width=7}
+cv.lasso.out<-readRDS('cv_lasso_out.Rds')
+plot(cv.lasso.out, ylab = 'MSE' )
+```
+\newpage
+
+### Random Forest Importance Scores
+```{r random forest plots, echo = FALSE }
+rf.spotifyn12<-readRDS('rf_spotify.Rds')
+as.data.frame(importance(rf.spotifyn12)) %>%
+  kbl(digits = c(2,0)) %>%
+  kable_styling()
+
+
+varImpPlot(rf.spotifyn12, main = 'Random Forests Importance and Purity',cex = .70)
+```
+
+\newpage
+
+### Test Errors Summary
+```{r Test Errors, eval=FALSE}
+tmse.null<- readRDS('tsme_null.Rds')
+tmse.lm.base<-readRDS('tsme_lm_base.Rds')
+tmse.lasso<-readRDS('tmse_lasso.Rds')
+tmse.ridge<-readRDS('tmse_ridge.Rds')
+tmse.regrtree<-readRDS('tmse_regrtree.Rds') 
+mse.rf<-readRDS('mse_rf.Rds')
+tmse.pca<-readRDS('tmse_pca.Rds')
+tmse.lm.int<-readRDS('tmse_lm_int.Rds')
+tmse.lm.poly<-readRDS('tmse_lm_poly.Rds')
+mse_cv_best<-readRDS('mse_cv_best')
+
+
+mse<- as.data.frame(cbind(c('Null','Base Linear','Lasso','Ridge', 
+                              'Regression Tree', 'Random Forests','PCR', 
+                            'Pol. Linear', 'Interaction Linear',
+                            'Best Subset Selection'), 
+                            c(tmse.null, tmse.lm.base, tmse.lasso, 
+                              tmse.ridge, tmse.regrtree)))
+                              mse.rf,tmse.pca[which.min(tmse.pca)],
+                              tmse.lm.int,tmse.lm.poly, 
+                              mse_cv_best[which.min(mse_cv_best)])))
+mse <- setNames(mse,c('Model','Test MSE'))
+
+mse[,2]<- as.numeric(mse[,2])
+  mse %>%
+  kbl(digits = c(NA,4)) %>%
+  kable_styling()
+```
+
+### Data Cleaning
+
+```{r Data Cleaning, eval=FALSE}
+# Artists cleaning
+# Some artists and songs have very strange names
+# These names are removed in order to create new features based off of 
+# these variables.
+artist.matches <- which(
+  rowSums(
+    `dim<-`(grepl("[~$^+=<>??Z]+", as.matrix(spotify$artists), fixed=F),
+            dim = c(length(spotify$artists),1))
+  ) > 0
+)    
+name.matches <- which(
+  rowSums(
+    `dim<-`(grepl("[~$^+=<>??Z]+", as.matrix(spotify$name), fixed=F), 
+            dim = c(length(spotify$name),1))
+  ) > 0
+)
+spotify <-spotify[-artist.matches,]
+spotify <-spotify[-name.matches,]
+
+# Duration_ms
+# Only keep songs with less than 600000 ms in duration (10 minutes),
+# as songs with greater than that duration are extreme outliers.
+spotify <- spotify[spotify$duration_ms < 600000, ]
+
+# Loudness cleaning
+# Some tracks have -60db loudness, and most of these are "pause tracks". 
+# Since these tracks are not really music, they are removed from the dataset.
+spotify <- spotify[(spotify$loudness > -40),]
+
+# The "loud songs" don't seem necessarily loud (for example Eminem - Insane)
+# It is likely just like an amplifier, 0db is the standard output power 
+# for the speaker. Thus, songs greater than -1dB are removed.
+spotify <- spotify[(spotify$loudness < -1),]
+
+# Speechiness cleaning
+# When listening to a few of the songs with high speechiness
+# and high instrumentalness, they are either very old 
+# (with dampened & noised singing) or truly instrumental without vocals
+# Therefore they are considered  to be anomalies and thus are removed
+# from the dataset.
+
+spotify <- spotify[!((spotify$speechiness>2/3) & 
+                       (spotify$instrumentalness>1/2)),]
+
+# It appears that there is a small gap between the songs that have 
+# zero and non-zero speech values
+# Most don't actually contain speech
+# If there is speechiness in the song, it starts at about 0.022 speechiness
+# The effect is small (2%) but the nonzero data are shifted by
+# by -0.02 and rescaled to a [0,1] range.
+
+spotify$speechiness[spotify$speechiness > 0] <- 
+  spotify$speechiness[spotify$speechiness > 0] - 0.02
+
+spotify$speechiness <- spotify$speechiness/(1-0.02)
+
+# Tempo cleaning
+# A short listen to some of the high tempo (BPM) songs indicates 
+# they do not have high BPM and thus are anomalies.
+spotify <- spotify[!spotify$tempo > 200, ]
+
+# Similarly, songs < 50bpm tend to be faster than the tempo would suggest.
+# These are also removed from the dataset.
+spotify <- spotify[!spotify$tempo < 50, ]
+```
+
+### Correlation of Features
+
+```{r Correlation of Features, eval =FALSE}
+nums <- unlist(lapply(spotify, is.numeric))
+numeric_cols <- spotify[, nums]
+
+# Create correlation matrix
+cor_matrix <- cor(numeric_cols)
+
+# Reorder the correlation matrix using hierarchical clustering
+ggcorrplot(cor_matrix, hc.order = TRUE,tl.cex=8, tl.srt = 90)
+#saveRDS(cor_matrix, file = 'cor_matrix.Rds')
+```
+
+### Feature Engineering
+
+```{r Feature Engineering, eval=FALSE}
+# Key dummy
+# Change the categorical key variable into a dummy variable
+# The 'key' identifies the tonality of a song, similar to 'Do, Re, Mi..'.
+# A 'sharp' is between two regular keys.
+
+key_labels = c('C', 'C_sharp', 'D', 'D_sharp', 'E', 'F', 'F_sharp',
+               'G', 'G_sharp', 'A', 'A_sharp', 'B')
+
+# replace key number with key letter
+for (i in 0:11){
+  spotify$key[spotify$key==i] <- key_labels[i+1]
+}
+
+# create dummy columns
+spotify <- dummy_cols(spotify, select_columns = 'key')
+
+# drop original column and 1 key signature to remove collinearity
+# spotify = subset(spotify, select = -c(key, key_G_sharp) )  
+
+# drop original column
+spotify = subset(spotify, select = -c(key) )
+
+# Number of artists
+# Create a variable to count the number of artists in a song.
+# Replace brackets with empty string
+spotify$num_artists <- gsub("\\[|\\]", "", spotify$artists)
+
+# Split artists on comma
+strsplit_func <- sapply(spotify$num_artists, strsplit, split = ',')
+
+# Counts the number of artists
+spotify$num_artists <- unlist(lapply(strsplit_func, length))
+
+# Only keep songs with 5 or less artists
+spotify <- spotify[spotify$num_artists <= 5, ]
+
+
+# Word count dummies
+# Create 2 variables to count the number of words in a song name and 
+# in an artist's name, respectively.
+n.name <- sapply(gregexpr("[[:alpha:]]+", spotify$name), 
+                 function(x) sum(x > 0))
+n.artists <- sapply(gregexpr("[[:alpha:]]+", spotify$artists), 
+                    function(x) sum(x > 0))
+spotify$num_words_artists <- n.artists
+spotify$num_words_name <- n.name
+```
+
+```{r External Data Source, eval=FALSE}
+## Financial Crisis Year
+# Get data listing which years had a global financial crisis.
+# Create an interaction term 
+# https://scholar.harvard.edu/rogoff/time-different%E2%80%94data-files
+# Table 15.1
+
+spotify$financial_crisis_year <- NA
+
+crisis_years <- c(1890:1893, 1907:1908, 1914, 1929:1931,
+                  1981:1982, 1987:1988, 1991:1992, 
+                  1994:1995, 1997:1996, 2007:2008)
+
+spotify$financial_crisis_year <- ifelse(spotify$year %in% 
+                                          crisis_years, 1, 0) 
+```
+
+```{r Dataframe for Classification Models, eval=FALSE}
+class.spotify <- spotify
+
+high_valence<- which(class.spotify$valence > 2/3)
+neutral_valence <- which((class.spotify$valence <= 2/3)
+                         & (class.spotify$valence >= 1/3))
+low_valence <- which(class.spotify$valence < 1/3)   
+
+class.spotify <- spotify
+
+high_valence <- which(class.spotify$valence >= 1/2)
+low_valence <- which(class.spotify$valence < 1/2)    
+class.spotify$cvalence[low_valence] <- -1
+class.spotify$cvalence[high_valence] <- 1
+```
+
+### Design and Response Matrices
+
+````{r Design and Response, eval=FALSE}
+datax <- dplyr::select(spotify, -c('name','artists','release_date','id',
+                                   'key_G_sharp', 'year'))
+
+x <- model.matrix(spotify$valence ~ . - name - artists - id - 
+                    release_date - key_G_sharp - year, data=spotify)
+
+y <- spotify$valence
+
+datac <- dplyr::select(class.spotify, -c('name','artists','release_date',
+                                         'id', 'year','valence','cvalence'))
+
+xc <-model.matrix(class.spotify$cvalence ~ . - name - artists - id - 
+                  release_date - year - acousticness - loudness-cvalence 
+                  -valence, data = class.spotify)
+# removed some correlated variables
+
+yc <- class.spotify$cvalence
+#saveRDS(spotify, file='spotify.Rds')
+#saveRDS(x, file='x.Rds')
+#saveRDS(y, file='y.Rds')
+#saveRDS(class.spotify, file='class_spotify.Rds')
+#saveRDS(xc, file='xc.Rds')
+#saveRDS(yc, file='yc.Rds')
+#saveRDS(datac, file='datac.Rds')
+#saveRDS(datax, file='datax.Rds')
+```
+
+### Training and Test Sets
+
+```{r Training and Test Set, and Folds, echo=FALSE}
+# train=sample(1:nrow(x), floor(nrow(x)/2))
+train = sample(1:nrow(x), floor(.7 * nrow(x)))
+test = (-train)
+flds <- createFolds(y[train], k = 10, list = TRUE, returnTrain = FALSE)
+```
+
+### Null Model
+
+```{r Null model,eval=FALSE}
+#Null model
+tmse.null <- mean((mean(y[train]) - y[test])^2)
+tmse.null    
+  #0.06774132 Test MSE
+  
+#saveRDS(tmse.null, file = 'tsme_null.Rds')
+```
+
+### Linear Models
+
+  - **Base Linear Model**
+
+```{r Linear Regression Base Model, eval=FALSE}
+# Base Model (regress on all variables)
+lm.fit.base = lm(valence ~ ., data = datax[train,])
+# glm_fit_base = glm(valence ~ ., data = datax[train,])
+pred.lm.base <-predict(lm.fit.base, newdata=datax[test,])
+
+# Get the test MSE error
+tmse.lm.base <- mean((pred.lm.base - y[test])^2)
+tmse.lm.base #0.03380392
+# saveRDS(tmse.lm.base, file = 'tsme_lm_base.Rds')
+# saveRDS(lm.fit.base, file = 'lm_fit_base.Rds')
+```
+
+  - **Interaction Model**
+
+```{r Linear Regression Interaction Terms Model, eval=FALSE}
+# Interaction Terms model
+lm.fit.interaction = lm(valence ~ .  + 
+              acousticness:energy + acousticness:loudness +
+              acousticness:popularity + 
+              acousticness:financial_crisis_year + 
+              energy:loudness + energy:popularity + 
+              energy:financial_crisis_year + loudness:popularity + 
+              loudness:financial_crisis_year +
+              popularity:financial_crisis_year
+            , data = datax[train,])
+summary(lm.fit.interaction)  
+
+glm_fit_interaction = glm(valence ~ .  + 
+              acousticness:energy + acousticness:loudness +
+              acousticness:popularity + 
+              acousticness:financial_crisis_year + 
+              energy:loudness + energy:popularity + 
+              energy:financial_crisis_year + loudness:popularity + 
+              loudness:financial_crisis_year +
+              popularity:financial_crisis_year
+            , data = datax[train,])
+
+pred.lm.int <-predict(lm.fit.interaction, newdata=datax[test,])
+
+# Get the test MSE error
+    tmse.lm.int <- mean((pred.lm.int - y[test])^2)
+    tmse.lm.int #0.03255112
+#saveRDS(tmse.lm.int, file = 'tmse_lm_int.Rds')
+#saveRDS(lm.fit.interaction, file ='lm.fit.interaction.Rds')
+```
+
+  - **Polynomial Model**
+
+```{r Polynomial Regression,eval=FALSE}
+# Variables to test: energy, danceability
+# Choosing these variables since they have the largest individual impact
+# on valence.
+
+# Energy variable raised to degree 2
+lm_fit_energy = lm(valence ~ .  - energy + poly(energy, 2), data = datax[train,])
+lm_fit_energy_summary = summary(lm_fit_energy)  
+lm_fit_energy_summary$r.squared
+
+# Danceability variable raised to degree 2
+lm_fit_danceability = lm(valence ~ .  - danceability + 
+                       poly(danceability, 2), data = datax[train,])
+lm_fit_danceability_summary = summary(lm_fit_danceability)
+lm_fit_danceability_summary$r.squared
+
+# Energy and danceability variables raised to degree 2
+lm_fit_energy_and_danceability = lm(valence ~ .  - danceability 
+                                + poly(danceability, 2)
+        - energy + poly(energy, 2), data = datax[train,])
+lm_fit_energy_and_danceability_summary = 
+summary(lm_fit_energy_and_danceability)
+lm_fit_energy_and_danceability_summary$r.squared
+
+glm_fit_polynomial = glm(valence ~ .  - danceability 
+                                + poly(danceability, 2)
+        - energy + poly(energy, 2), data = datax[train,])
+
+pred.lm.poly <-predict(glm_fit_polynomial, newdata=datax[test,])
+
+# Get the test MSE error
+tmse.lm.poly <- mean((pred.lm.poly - y[test])^2)
+tmse.lm.poly # 0.03227133
+#saveRDS(tmse.lm.poly,file='tmse_lm_poly.Rds')
+#saveRDS(glm_fit_polynomial, file='glm_fit_polynomial.Rds')
+```
+
+### Subset Selection
+
+  - **Best Subset Selection**
+
+```{r Best Subset Selection,eval=FALSE}
+## Custom version of the predict function for regsubsets()
+predict_regsubsets = function(object, newdata, id, ...) {
+    form = as.formula(object$call[[2]])
+    mat = model.matrix(form, newdata)
+    coef_i = coef(object, id = id)
+    mat[, names(coef_i)] %*% coef_i
+  }  
+  
+#nvmax sets the number of subsets to examine (28 predictors)
+regfit_full = regsubsets(valence ~ . , data = datax[train,], nvmax = 27) 
+reg_summary = summary(regfit_full) # shows which variables are selected
+
+reg_summary$rsq # shows improvement of R^2 as more variables are selected
+# Cp is an unbiased estimate of test MSE.
+reg_summary$cp # shows improvement of Cp as more variables are selected
+
+par(mfrow=c(2,2))
+# highest R^2 is .51
+plot(reg_summary$rsq, xlab="Number of Variables", ylab="R^2")
+best_model_rsq = which.max(reg_summary$rsq)
+points(best_model_rsq, reg_summary$rsq[best_model_rsq], col="blue", cex=2, pch=20)
+best_model_rsq
+reg_summary$rsq[best_model_rsq]
+
+## Plot Cp (an unbiased estimate of test MSE)
+plot(reg_summary$cp, xlab="Number of Variables", ylab="Cp", type="l")
+best_model_cp = which.min(reg_summary$cp)
+points(best_model_cp, reg_summary$cp[best_model_cp], col="red", cex=2, pch=20)
+
+par(mfrow=c(1,1))
+plot(regfit_full, scale="r2") # Shows which variables to include the model 
+# --> black squares are selected
+plot(regfit_full, scale="Cp")
+
+# Interaction terms model:
+regfit_full = regsubsets(valence ~ .  + 
+                  acousticness:energy + acousticness:loudness +
+                  acousticness:popularity + 
+                  acousticness:financial_crisis_year + 
+                  energy:loudness + energy:popularity + 
+                  energy:financial_crisis_year + loudness:popularity + 
+                  loudness:financial_crisis_year +
+                  popularity:financial_crisis_year
+                , data = datax[train,])
+reg_summary = summary(regfit_full) # shows which variables are selected
+## None of the interaction terms are significant
+#saveRDS(regfit_full,file='regfit_full.Rds')
+```
+
+
+  - **Best Subset Cross Validation**
+
+```{r Best Subset Selection - K-Fold Cross Validation, eval=FALSE}
+## K-Cross Validation Approach using best subset selection
+num_predictors = length(datax) -1  #subtract valence from count
+
+# Initialize an error matrix with row (10 different folds) and column 
+# (28 different predictors)
+cv_errors_best = matrix(0, 10, num_predictors)
+
+# Write a for loop that performs cross-validation, in the kth fold, 
+# the elements of folds that equal k are in the test set 
+# and the remainder are in the training set
+
+for(i in 1:10){
+  fit_full = regsubsets(valence~. , data=datax[-flds[[i]],], nvmax=27)
+  for(k in 1:27){
+    pred = predict_regsubsets(fit_full, datax[flds[[i]],], id=k)
+    cv_errors_best[i,k]=mean((datax$valence[flds[[i]]]-pred)^2)
+  }
+}
+
+## Average of the cv_error over all 10 folds
+mse_cv_best = apply(cv_errors_best,2,mean) # 2 indicates the columns
+## Plot of MSE vs model size and choose the optimal model size
+plot(mse_cv_best, ylab="MSE", xlab="Model Size", pch=19, type="b")
+points(which.min(mse_cv_best), mse_cv[which.min(mse_cv_best)], col="red", cex=2, pch=20)
+which.min(mse_cv_best) # = 27
+mse_cv_best[which.min(mse_cv_best)] #0.03384037
+#saveRDS(mse_cv_best, file ='mse_cv_best.Rds' )
+```
+
+
+### Principal Component Regression
+
+```{r Principal Component Regression, eval=FALSE}
+## 'LOO' is computationally intensive, so 'CV' is used instead
+fit.pcr = pcr(valence ~ . , data = datax[train,], validation = "CV", 
+              scale = T)
+pcr_summary <- summary(fit.pcr)
+
+# "selectNcomp()" Choosing the best number of components in PCR.
+# "method = `onesigma`" implies the "1 standard error rule".
+selectNcomp(fit.pcr, method = "onesigma", plot = TRUE)
+
+# plot "Number of Components" vs "Standardized Coefficients"
+bhats = fit.pcr$coefficients[,1,]
+num_components <- length(bhats[1,])
+plot(c(1, num_components), range(bhats), type = "n",
+     xlab = "Number of Components", ylab = "Standardized Coefficients")
+for(j in 1:num_components){
+  lines(1:num_components, bhats[j,], type = "S", col = j, lty = j, lwd = 3)
+}
+legend(x = "topleft", legend = rownames(bhats)[1:4], col = 1:4, 
+       lty = 1:4, lwd = 3)
+for(j in 5:num_components){
+  lines(1:num_components, bhats[j,], type = "S", col = "gray", lty = 1, 
+        lwd = 1)
+
+# Prediction on test set
+tmse.pca = rep(NA, num_components)
+for(j in 1:num_components){
+  yhat = predict(fit.pcr, ncomp = j, newdata = datax[test,])
+  tmse.pca[j] = mean((yhat - datax$valence[test])^2)
+}
+
+plot(tmse.pca, type = "o", xlab = "Number of Components", ylab = "PMSE")
+
+min_pmse <- which.min(tmse.pca)
+min_pmse
+points(min_pmse, tmse.pca[min_pmse], col="red", cex=2, pch=20)
+tmse.pca[min_pmse]
+
+# Remove first column since it's the intercept
+x <-model.matrix(valence~. , data=datax)[,-1] 
+
+## Recover the original coefficients.
+fit.pcr = pcr(valence ~ . , data = datax[train,], scale = T)
+bhat.pcr = fit.pcr$coefficients[,1,num_components]
+sd = apply(x, 2, sd)
+bhat.pcr.rec = bhat.pcr/sd
+# Comparing to lm():
+bhat.lm = coef(lm(valence ~ . , data = datax[train,]))[-1]
+# Compare the models
+cbind(bhat.pcr, bhat.pcr.rec, bhat.lm)
+
+#saveRDS(tmse.pca, 'tmse_pca.Rds')
+#saveRDS(fit.pcr , 'fit_pcr.Rds')
+```
+
+
+### Ridge Regression
+
+````{r Ridge regression,eval=FALSE}
+# Ridge regression
+grid <- 10^seq(10, -2, length = 100) # lambda value range. 
+# From null model to least squares
+ridge.mod <- glmnet(x[train,],y[train], alpha = 0, lambda = grid)
+
+# Test MSE with large lambda 
+ridge.pred=predict(ridge.mod, s=10^3, newx=x[test, ])
+mean((ridge.pred-y[test])^2)
+  #  0.06770933 Test MSE
+
+# Cross-Validation to choose alpha
+cv.ridge.out <- cv.glmnet(x[train,],y[train], alpha=0)
+# plot(cv.ridge.out)
+bestlam.ridge =cv.out$lambda.min
+bestlam.ridge
+#1.433686
+
+# Test error associated with this alpha
+ridge.pred <- predict(ridge.mod, s = bestlam.ridge, newx = x[test,])
+tmse.ridge <- mean((ridge.pred-y[test])^2)
+tmse.ridge  
+  #  0.03392276
+  
+# Refit with bestlam
+ridge.out <-glmnet(x[train,],y[train], alpha=0)
+predict(ridge.out, type="coefficients", s=bestlam.ridge)[1:28,]
+# Most important variables: danceability, energy, explicit
+    
+#saveRDS(mmse.ridge, 'mmse_ridge.Rds')
+#saveRDS(tmse.ridge, 'tmse_ridge.Rds')
+#saveRDS(ridge.out, 'ridge_mod.Rds')
+#saveRDS(bestlam.ridge, 'bestlam_ridge.Rds')
+#saveRDS(cv.ridge.out, 'cv_ridge_out.Rds')
+```
+
+
+### Lasso Regression
+
+```{r Lasso,eval=FALSE}
+lasso.mod <- glmnet(x[train, ], y[train], alpha = 1, lambda = grid)
+plot(lasso.mod)
+
+# Cross-validation
+cv.lasso.out <- cv.glmnet(x[train, ], y[train], alpha =1)
+plot(cv.lasso.out)
+bestlam.lasso <- cv.out$lambda.min
+bestlam.lasso
+  #0.0001777183
+lasso.pred <- predict(lasso.mod ,s = bestlam.lasso, newx=x[test ,])
+tmse.lasso <- mean((lasso.pred-y[test])^2)
+tmse.lasso  
+  # 0.03549916
+
+# Variable selection
+lasso.out <-glmnet(x,y,alpha=1, lambda = grid)
+lasso.coef <- predict(lasso.out, type ="coefficients",
+                   s=bestlam.lasso)[1:28,]
+lasso.coef
+r2.lasso <- 1-sum((lasso.pred-y[test])^2) / 
+  sum((y[test]-mean(y[test]))^2)
+
+#saveRDS(mmse.lasso, 'mmse_lasso.Rds')
+#saveRDS(tmse.lasso, 'tmse_lasso.Rds')
+#saveRDS(lasso.out, 'lasso_mod.Rds')
+#saveRDS(cv.lasso.out, 'cv_lasso_out.Rds')
+```
+
+### Regression Tree
+
+````{r Regression Tree,eval=FALSE}
+# Regression Tree
+regrtree.mod <- tree(valence ~ ., data = datax, subset = train)
+summary(regrtree.mod)
+plot(regrtree.mod)
+text(regrtree.mod ,pretty=0)
+regrtree.pred<- predict(regrtree.mod, newdata = datax[test, ])
+
+tmse.regrtree <- mean((regrtree.pred-y[test])^2)
+tmse.regrtree
+
+#0.04113658 Test MSE    
+#saveRDS(tmse.regrtree, 'tmse_regrtree.Rds')
+#saveRDS(regrtree.mod, 'regrtree_mod.Rds')
+```
+
+### Random Forests
+
+```{r Random Forests, eval=FALSE}
+
+rf.spotifyn4 <- randomForest(x[train,],y[train], mtry=sqrt(length(datax)-1), 
+                             importance = TRUE, ntree = 4)
+rf.spotifyn4
+  #0.04550405 Training MSE
+rf.spotifyn8 <- randomForest(x[train,],y[train], mtry=sqrt(length(datax)-1), 
+                             importance = TRUE, ntree = 8)
+rf.spotifyn8
+  #0.03827638 Training MSE
+
+rf2.spotifyn12 <- randomForest(x[train,],y[train], mtry=sqrt(length(datax)-1), 
+                              importance = TRUE, ntree = 12)
+rf2.spotifyn12
+  
+  #0.03406181 Training MSE
+rf.spotifyn12 <- randomForest(x[train,],y[train], mtry=(length(datax)-1)/3, 
+                              importance = TRUE, ntree = 12)
+rf.spotifyn12
+  # 0.03296334 Training MSE
+
+# rf.spotifyn24 <- randomForest(x,y, mtry=sqrt(length(datax)-1), 
+#                               importance = TRUE, ntree = 24)
+# rf.spotifyn24
+  # 0.02779426 Training MSE
+  # 10min runtime, not efficient, we therefore prefer 12 trees
+
+# Test MSE
+yhat.rf = predict(rf.spotifyn12,newdata=x[test,])
+
+mse.rf<- mean((yhat.rf-y[test])^2)
+  mse.rf  
+  # 0.02724718Test MSE 
+
+importance(rf.spotifyn12)
+varImpPlot(rf.spotifyn12)
+
+#saveRDS(rf.spotifyn12, 'rf_spotify.Rds')
+#saveRDS(mse.rf, 'mse_rf.Rds')
+```
+
+### Adaboost
+
+```{r AdaBoost, eval=FALSE}
+#depth 1
+adab.modd1 <- adaboost(xc[train,], yc[train], tree_depth = 1)
+#Prediction
+pred.adab1 <- predict(adab.modd1, xc[test,])
+misclass.adab1 <-mean(pred.adab1 != yc[test])
+# Misclassification error
+misclass.adab1
+#Confusion Matrix
+confusionMatrix(as.factor(pred.adab1), as.factor(yc[test]))
+
+
+print(adab.modd1)
+adab.modd1$terms
+(adab.modd1$trees)
+
+#depth 2
+adab.modd2 <- adaboost(xc[train,],yc[train], tree_depth = 2)
+pred.adab2 <- predict(adab.modd2, xc[test,])
+#Prediction
+misclass.adab2 <-mean(pred.adab2 != yc[test])
+# Misclassification error
+misclass.adab2
+#Confusion Matrix
+confusionMatrix(as.factor(pred.adab2), as.factor(yc[test]))
+
+#saveRDS(adab.modd2, 'adab_modd2.Rds')
+#saveRDS(tmse.adab2, 'tmse_adab2.Rds')
+```
+
+
+\newpage
+## 3.2 Appendix for Coordinate Descent
+
+The code used for parts 2.5 and 2.6 for training and analyzing the models were hidden in the report to make it more readable. Therefore, we include it here in the appendix.
+
+```{r eval=FALSE}
+# libraries used
+library(tidyverse)
+library(MASS)
+library(kableExtra)
+```
+
+### Data Generation
+```{r generate-data2, eval=FALSE}
+gen_data = function(n, beta, Sigma, sd=3){
+  ### generate a data set ###
+  epsilon = rnorm(n, sd = sd)
+  X = mvrnorm(n, mu = rep(0, length(beta)), Sigma)
+  Y = X%*%beta + epsilon
+  return(list("X" = X, "Y" = Y))
+}
+```
+
+### Scenario A
+
+```{r eval=FALSE}
+n = 240; train = 1:20; val = 21:40; test = 41:240
+beta = c(3, 1.5, 0, 0, 2, 0, 0, 0)
+Sigma = outer(1:8, 1:8, function(i,j) 0.5^abs(i-j))
+
+# data sets for A
+datasets = map(1:50, ~gen_data(n, beta, Sigma))
+
+# sequences for lambda and alpha
+lambdaSEQ = c(0, 10^seq(-3, 1, length.out = 39))
+alphaSEQ = seq(0.05, 1, length.out = 20)
+
+# model fitting
+resLASSOA = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETA = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOA$type = "lasso"; resELNETA$type = "elnet"
+resultsA = rbind(resLASSOA, resELNETA)
+resultsA$scenario = 'Scenario A'
+```
+
+### Scenario B
+
+```{r eval=FALSE}
+# data sets for B
+beta = rep(0.85, 8)
+datasets = map(1:50, ~gen_data(n, beta, Sigma))
+
+# model fitting
+resLASSOB = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETB = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOB$type = "lasso"; resELNETB$type = "elnet"
+resultsB = rbind(resLASSOB, resELNETB)
+resultsB$scenario = 'Scenario B'
+```
+
+### Scenario C
+
+```{r eval=FALSE}
+n = 400; train = 1:100; val = 101:200; test = 201:400
+beta = c(rep(3, 9), rep(0, 11))
+rho = matrix(rep(0.85, 9), ncol = 3)
+Sigma = rbind(cbind(rho, matrix(rep(0, 17*3), ncol = 17)), 
+              cbind(matrix(rep(0, 9), ncol = 3), rho, matrix(rep(0, 14*3), ncol = 14)),
+              cbind(matrix(rep(0, 3*6), ncol = 6), rho, matrix(rep(0, 11*3), ncol = 11)), 
+              matrix(rep(0, 20*11), ncol = 20))
+diag(Sigma) = rep(1, 20)
+
+# data sets for C
+datasets = map(1:50, ~gen_data(n, beta, Sigma, 3))
+
+# model fitting
+resLASSOC = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETC = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOC$type = "lasso"; resELNETC$type = "elnet"
+resultsC = rbind(resLASSOC, resELNETC)
+resultsC$scenario = 'Scenario C'
+```
+
+### Scenario D
+
+```{r eval=FALSE}
+n = 240; train = 1:20; val = 21:40; test = 41:240
+beta = c(rep(1, 25), rep(0, 5))
+Sigma = diag(rep(1, 30))
+
+# data sets for D
+datasets = map(1:50, ~gen_data(n, beta, Sigma, sd=3))
+
+# model fitting
+resLASSOD = map_df(datasets, gridSearch, lambdaSEQ)
+resELNETD = map_df(datasets, gridSearch, lambdaSEQ, alphaSEQ)
+resLASSOD$type = "lasso"; resELNETD$type = "elnet"
+resultsD = rbind(resLASSOD, resELNETD)
+resultsD$scenario = 'Scenario D'
+```
+
+### Plots for Chapter 2.4
+
+```{r eval=FALSE}
+# MSE plot
+results = rbind(resultsA, resultsB, resultsC, resultsD)
+
+ggplot(results) +
+  geom_boxplot(aes(type, mse)) +
+  facet_wrap(~scenario, scales = "free_y") +
+  labs(title = "Prediction Accuracy", 
+       subtitle = "measured by the mean squared error (MSE)", caption = "Figure 1")
+```
+
+```{r eval=FALSE}
+# Nonzero coefficients plot
+Summary = results %>%
+  group_by(scenario, type) %>%
+  summarise(mse = mean(mse),
+  nonzero = median(nonzero),
+  trueModel = sum(trueModel),
+  incModel = sum(incModel))
+
+ggplot(results, aes(type, nonzero)) +
+  geom_jitter(width = 0.10, height = 0, alpha = 0.5) +
+  geom_point(aes(type, nonzero), data = Summary, col='red') +
+  facet_wrap(~scenario, scales = "free_y") +
+  labs(title = "Number of Nonzero Coefficients chosen by the Elastic Net vs Lasso",
+       subtitle = "Each data set is represented by one point, with the median in red",
+       caption = "Figure 2")
+```
+
